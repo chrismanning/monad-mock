@@ -115,7 +115,12 @@ makeAction actionNameStr classTs = do
     methods <- traverse classMethods classInfos
     actionCons <- concat <$> zipWithM (methodsToConstructors actionTypeCon actionTypeParam) classTs methods
 
-    let actionDec = DataD' [] actionName [PlainTV actionParamName] actionCons
+    let
+#if MIN_VERSION_template_haskell(2,17,0)
+        actionDec = DataD' [] actionName [PlainTV actionParamName ()] actionCons
+#else
+        actionDec = DataD' [] actionName [PlainTV actionParamName] actionCons
+#endif
         mkStandaloneDec derivT = standaloneDeriveD' [] (derivT `AppT` (actionTypeCon `AppT` VarT actionParamName))
         standaloneDecs = [mkStandaloneDec (ConT ''Eq), mkStandaloneDec (ConT ''Show)]
     actionInstanceDec <- deriveAction' actionTypeCon actionCons
@@ -135,7 +140,12 @@ makeAction actionNameStr classTs = do
 
       let classArgs = typeArgs classType
       let mkClassKind vars = foldr (\a b -> AppT (AppT ArrowT a) b) (ConT ''Constraint) (reverse varKinds)
-            where varKinds = map (\(KindedTV _ k) -> k) vars
+            where
+#if MIN_VERSION_template_haskell(2,17,0)
+              varKinds = map (\(KindedTV _ _ k) -> k) vars
+#else
+              varKinds = map (\(KindedTV _ k) -> k) vars
+#endif
           constraintStr = show (ppr (ConT ''Constraint))
 
       when (length classArgs > length classVars) $
@@ -395,7 +405,11 @@ typeArgs _          = []
 -- example, applying 'splitFnType' to
 -- @forall a b c. (Foo a, Foo b, Bar c) => a -> b -> c@ produces
 -- @([a, b, c], (Foo a, Foo b, Bar c), [a, b], c)@.
+#if MIN_VERSION_template_haskell(2,17,0)
+splitFnType :: Type -> ([TyVarBndr Specificity], Cxt, [Type], Type)
+#else
 splitFnType :: Type -> ([TyVarBndr], Cxt, [Type], Type)
+#endif
 splitFnType (a `AppT` b `AppT` c) | a == ArrowT =
   let (tyVars, ctx, args, result) = splitFnType c
   in (tyVars, ctx, b:args, result)
@@ -428,9 +442,15 @@ typeVarNames (AppT a b) = nub (typeVarNames a ++ typeVarNames b)
 typeVarNames _ = []
 
 -- | Given any arbitrary 'TyVarBndr', gets its 'Name'.
+#if MIN_VERSION_template_haskell(2,17,0)
+tyVarBndrName :: TyVarBndr f -> Name
+tyVarBndrName (PlainTV name _) = name
+tyVarBndrName (KindedTV name _ _) = name
+#else
 tyVarBndrName :: TyVarBndr -> Name
 tyVarBndrName (PlainTV name) = name
 tyVarBndrName (KindedTV name _) = name
+#endif
 
 -- | Given some 'Info' about a class, get its methods as 'SigD' declarations.
 classMethods :: Info -> Q [Dec]
@@ -446,7 +466,11 @@ classMethods other = fail $ "classMethods: internal error; expected a class type
 | without writing CPP everywhere and ending up with a small mess.              |
 |------------------------------------------------------------------------------}
 
+#if MIN_VERSION_template_haskell(2,17,0)
+pattern DataD' :: Cxt -> Name -> [TyVarBndr ()] -> [Con] -> Dec
+#else
 pattern DataD' :: Cxt -> Name -> [TyVarBndr] -> [Con] -> Dec
+#endif
 #if MIN_VERSION_template_haskell(2,11,0)
 pattern DataD' a b c d = DataD a b c Nothing d []
 #else

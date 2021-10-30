@@ -109,6 +109,14 @@ resolveTypeNames t@WildCardT = return t
 #if MIN_VERSION_template_haskell(2,12,0)
 resolveTypeNames t@UnboxedSumT{} = return t
 #endif
+#if MIN_VERSION_template_haskell(2,16,0)
+resolveTypeNames (ForallVisT tyVars t) = ForallVisT tyVars <$> resolveTypeNames t
+resolveTypeNames (AppKindT a b) = AppKindT <$> resolveTypeNames a <*> resolveTypeNames b
+resolveTypeNames t@ImplicitParamT{} = return t
+#endif
+#if MIN_VERSION_template_haskell(2,17,0)
+resolveTypeNames t@MulArrowT{} = return t
+#endif
 
 resolveTypeName :: Name -> Q Name
 resolveTypeName (Name (OccName str) NameS) = lookupTypeName str >>= \case
