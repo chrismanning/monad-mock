@@ -198,9 +198,10 @@ makeAction actionNameStr classTs = do
 
     -- | Converts a single class method into a constructor for an action type.
     methodToConstructor :: Type -> Type -> Type -> Dec -> Q Con
-    methodToConstructor actionConT actionParamT classT (SigD name typ) = do
+    methodToConstructor actionConT actionParamT classT (SigD name _) = do
       let constructorName = methodNameToConstructorName name
-      newT <- replaceClassConstraint classT actionConT typ
+      methodT <- reifyType name
+      newT <- replaceClassConstraint classT actionConT methodT
       let (tyVars, ctx, argTs, resultT) = splitFnType newT
           gadtCon = gadtC' constructorName [actionParamT] argTs resultT
       return $ ForallC tyVars ctx gadtCon
@@ -292,7 +293,10 @@ replaceClassConstraint classType replacementType (ForallT vars preds typ) =
       -- actually perform the replacement substitution for each type var and its replacement
       replacedT = foldl' (flip $ uncurry substituteTypeVar) typ (zip replacedVars replacementTypes)
   in return $ ForallT newVars newPreds replacedT
-replaceClassConstraint _ _ _ = fail "replaceClassConstraint: internal error; report a bug with the monad-mock package"
+replaceClassConstraint classType replacementType (AppT a b) =
+  AppT <$> replaceClassConstraint classType replacementType a
+       <*> replaceClassConstraint classType replacementType b
+replaceClassConstraint _ _ typ = return typ
 
 -- | Given the name of a type of kind @* -> *@, generate an 'Action' instance.
 --
